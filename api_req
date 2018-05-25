@@ -1,0 +1,83 @@
+#!/usr/local/bin/python3 
+
+import http.client
+import pymongo # to do mongodb things
+import ssl # SSL stuff
+import json # to do JSON things
+import time # strftime() - creates a timestamp in specified format
+
+
+# It turns out that HTTPConnection() does in fact just send raw data
+# flying across the web. In an effort to secure communications we'll use
+# HTTPSConnection() instead.  HTTPSConnection() w/o context still appears to encrypt
+# data, but creating a default context is recommended so we do et
+context = ssl.create_default_context()
+conn = http.client.HTTPSConnection("api.royaleapi.com", context=context)
+
+#Get clan info
+f = open("clan.txt", "r")
+lines = f.readlines()
+f.close()
+
+headers = {
+	'auth':lines[0].strip(),
+}
+
+conn.request("GET", lines[1].strip(), headers=headers)
+
+#res is an HTTPClientResponse OBJ
+res = conn.getresponse()
+
+#data is now a bytes obj
+data = res.read()
+
+# Close HTTPSConnection
+conn.close()
+
+print("Openning a log file")
+logfile = "test." + time.strftime("%m%d")
+l = open(logfile,"a")
+print("Writing members to the database")
+
+# decoding bytes into a string
+# DO NOT REDFINE PYTHON'S SHIT 
+# eg, DO NOT NAME SHIT "str"
+s = data.decode("utf-8")
+print(s)
+# load string into a json type obj which is a dict/hash map
+json_obj = json.loads(s)
+
+# Set up a mongodb client
+# pymongo.MongoClient() defaults to localhost:27017
+client = pymongo.MongoClient()
+
+# mongo > use db
+db = client['db']
+# Ideally here we'll use something like db = client[json_obj['name']]???
+# we retreived this key from py3 shell
+# >>> json_obj.keys()
+# So, this looks like it'll work, but we received the following error
+# pymongo.errors.InvalidName: database names cannot contain the character '.'
+
+# access clan collection from db ( database )
+collection = db['clan']
+
+# Not sure if I can access this directly from db and not have to do the client -> collection shit
+# Anyways we'll test ( collection.insert_one(mmember).inserted_id
+# should work since clan and collection are both '<class 'pymongo.collection.Collection'>'
+# clan = client.db.clan looks a little bit cleaner 
+clan = db.clan
+
+# We got members key via json_obj.keys()
+# Should figure out how to make this a bulkwrite
+for member in json_obj['members']:
+	# Add a timestimp to each document
+	member.update({ "date": time.strftime( "%Y-%m-%d %H:%M:%S") } )
+	# Grab unique post_id ( transaction id for insert?)
+	post_id = clan.insert_one(member).inserted_id
+	S = str(post_id)
+	l.write(S + time.strftime(" %Y-%m-%d %H:%M:%S\n"))
+
+print("Done!")
+client.close()
+l.close()

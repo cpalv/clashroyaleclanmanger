@@ -1,0 +1,18 @@
+#!/usr/local/bin/python
+
+import pymongo
+import json
+
+# Start a client connection to mongodb
+
+f = open("clan.json", "r")
+
+try:
+	decoded = json.load(f)
+
+	for x in decoded['members']:
+		print(x['names'])
+except (ValueError, KeyError, TypeError):
+	print("JSON format error")
+
+json.dumps(f, indent=4)
